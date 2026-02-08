@@ -19,8 +19,15 @@ class LLMService:
         # Load API Key from Environment
         self.api_key = os.getenv("HF_TOKEN")
         self.base_url = "https://router.huggingface.co/v1"
-        self.model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
-        #self.model_name = "mistralai/Mistral-7B-Instruct-v0.2"
+        
+        # Priority list of models to try
+        self.models = [
+            "meta-llama/Meta-Llama-3-8B-Instruct",
+            "HuggingFaceH4/zephyr-7b-beta",
+            "mistralai/Mistral-7B-Instruct-v0.3",
+            "microsoft/Phi-3-mini-4k-instruct",
+            "google/gemma-1.1-7b-it"
+        ]
         
         if self.api_key:
             self.client = OpenAI(
@@ -30,14 +37,41 @@ class LLMService:
         else:
             print("WARNING: No HF_TOKEN found. Using template fallback.")
 
+    def _call_model(self, messages: List[dict]) -> str:
+        """
+        Try to get a response from any of the configured models.
+        """
+        errors = []
+        for model in self.models:
+            try:
+                print(f"Attempting LLM call with model: {model}")
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=1000,
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                error_msg = f"Model {model} failed: {str(e)}"
+                print(error_msg)
+                errors.append(error_msg)
+                continue
+        
+        # If all models fail
+        raise Exception(f"All LLM models failed. Errors: {'; '.join(errors)}")
+
     def generate_explanation(self, risks: List[DiseaseRisk], user_profile: dict = None) -> List[DiseaseRisk]:
         """
         Enriches risk objects with LLM-generated advice.
         """
         # Create/Append to debug log
         def log_debug(msg):
-            with open("server_debug.log", "a", encoding="utf-8") as f:
-                f.write(f"\n[{pd.Timestamp.now()}] {msg}\n")
+            try:
+                with open("server_debug.log", "a", encoding="utf-8") as f:
+                    f.write(f"\n[{pd.Timestamp.now()}] {msg}\n")
+            except:
+                pass
 
         if not self.api_key:
             log_debug("ERROR: API Key missing.")
@@ -46,25 +80,17 @@ class LLMService:
         try:
             # 1. Build Prompt
             prompt = self._build_prompt(risks, user_profile)
-            log_debug(f"PROMPT SENT:\n{prompt[:200]}...[truncated]...")
             
-            # 2. Call Hugging Face API
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": "You are a medical prevention advisor. Provide personalized, actionable health advice in JSON format."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=4000,
-            )
+            # 2. Call Hugging Face API (with fallback)
+            raw_text = self._call_model([
+                {"role": "system", "content": "You are a medical prevention advisor. Provide personalized, actionable health advice in JSON format."},
+                {"role": "user", "content": prompt}
+            ])
             
-            raw_text = response.choices[0].message.content
-            log_debug(f"RAW LLM RESPONSE:\n{raw_text[:300]}...[truncated]...")
+            log_debug(f"RAW LLM RESPONSE RECEIVED")
             
             # 3. Parse JSON
             enriched_data = self._parse_llm_response(raw_text)
-            log_debug(f"PARSED JSON KEYS: {list(enriched_data.keys())}")
             
             # 4. Merge with Original Risks
             for risk in risks:
@@ -87,7 +113,7 @@ class LLMService:
         """
         risk_summary = "\n".join([
             f"- {r.disease}: {r.probability*100:.1f}% ({r.risk_level.value}) | Drivers: {', '.join(r.contributing_factors[:3])}"
-            for r in risks
+            for r r in risks
         ])
         
         profile_str = json.dumps(user_profile, indent=2) if user_profile else "Not provided"
@@ -219,20 +245,16 @@ Tone: Professional yet friendly, like a knowledgeable health coach."""
             # Add conversation history if available
             if conversation_history:
                 for msg in conversation_history[-5:]:  # Last 5 messages for context
-                    messages.append(msg)
+                    # Ensure messages have only valid keys
+                    clean_msg = {"role": msg.get("role"), "content": msg.get("content")}
+                    if clean_msg["role"] and clean_msg["content"]:
+                        messages.append(clean_msg)
             
             # Add current user message
             messages.append({"role": "user", "content": user_message})
             
-            # Call LLM
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=500
-            )
-            
-            return response.choices[0].message.content
+            # Call LLM (with fallback)
+            return self._call_model(messages)
             
         except Exception as e:
-            return f"I'm having trouble connecting right now. Please try again in a moment. (Error: {str(e)[:50]})"
+            return f"I'm having trouble connecting to my knowledge base right now. Please try again in a moment. (Debug: {str(e)[:100]})"
