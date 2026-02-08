@@ -59,10 +59,13 @@ if "risks" not in st.session_state:
 def load_engines():
     return MLRiskEngine(), LLMService()
 
+import traceback
+
 try:
     risk_engine, llm_service = load_engines()
 except Exception as e:
     st.error(f"Failed to load engines: {e}")
+    st.code(traceback.format_exc())
     st.stop()
 
 # --- Sidebar: Health Input ---
