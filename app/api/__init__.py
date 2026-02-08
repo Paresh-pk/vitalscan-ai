@@ -1,1 +1,0 @@
-# VITALSCAN API Package

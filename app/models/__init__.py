@@ -1,1 +1,0 @@
-# VITALSCAN Models Package

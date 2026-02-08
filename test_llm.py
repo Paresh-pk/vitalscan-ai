@@ -20,13 +20,13 @@ client = OpenAI(
 try:
     print("Sending request to Hugging Face...")
     completion = client.chat.completions.create(
-        model="Qwen/Qwen2.5-Coder-32B-Instruct",
+        model="HuggingFaceH4/zephyr-7b-beta",
         messages=[
-            {"role": "system", "content": "You are a knowledgeable and empathetic health assistant for VITALSCAN, an AI-powered preventive health platform. Your role is to provide evidence-based, actionable health advice. NEVER diagnose medical conditions."},
-            {"role": "user", "content": "I have high blood pressure and diabetes. what should I do?"}
+            {"role": "system", "content": "You are a helper."},
+            {"role": "user", "content": "Say 'Health Check Passed' if you can hear me."}
         ],
         temperature=0.7,
-        max_tokens=1000
+        max_tokens=50
     )
     print("Response received:")
     print(completion.choices[0].message.content)

@@ -43,9 +43,9 @@ server_debug.log
 .DS_Store
 Thumbs.db
 
-# Model files (if large) - COMMENTED OUT FOR STREAMLIT DEPLOYMENT
-# ml/models/*.pkl
-# ml/models/*.joblib
+# Model files (if large)
+ml/models/*.pkl
+ml/models/*.joblib
 
 # Temporary files
 *.tmp

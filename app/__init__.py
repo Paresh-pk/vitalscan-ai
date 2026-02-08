@@ -1,1 +1,0 @@
-# VITALSCAN Application Package

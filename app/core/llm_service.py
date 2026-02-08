@@ -19,7 +19,7 @@ class LLMService:
         # Load API Key from Environment
         self.api_key = os.getenv("HF_TOKEN")
         self.base_url = "https://router.huggingface.co/v1"
-        self.model_name = "Qwen/Qwen2.5-Coder-32B-Instruct"
+        self.model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
         #self.model_name = "mistralai/Mistral-7B-Instruct-v0.2"
         
         if self.api_key:
@@ -216,43 +216,23 @@ Tone: Professional yet friendly, like a knowledgeable health coach."""
             # Build conversation messages
             messages = [{"role": "system", "content": system_prompt}]
             
-            # Add conversation history if available (limit to last 5 messages)
+            # Add conversation history if available
             if conversation_history:
-                for msg in conversation_history[-5:]:
-                    # Ensure proper role mapping
-                    role = msg.get("role", "user")
-                    if role == "assistant":
-                        role = "assistant"  # Keep as is
-                    elif role == "user":
-                        role = "user"  # Keep as is
-                    else:
-                        continue  # Skip invalid roles
-                    
-                    messages.append({
-                        "role": role,
-                        "content": msg.get("content", "")
-                    })
+                for msg in conversation_history[-5:]:  # Last 5 messages for context
+                    messages.append(msg)
             
             # Add current user message
             messages.append({"role": "user", "content": user_message})
             
-            # Call LLM with reduced token limit for stability
+            # Call LLM
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=0.7,
-                max_tokens=300  # Reduced from 500 for better reliability
+                max_tokens=500
             )
             
             return response.choices[0].message.content
             
         except Exception as e:
-            # Log the full error for debugging
-            error_msg = str(e)
-            print(f"CHAT ERROR: {error_msg}")
-            
-            # Return user-friendly message
-            if "400" in error_msg:
-                return "I encountered an issue processing your request. Please try rephrasing your question or start a new conversation."
-            else:
-                return f"I'm having trouble connecting right now. Please try again in a moment."
+            return f"I'm having trouble connecting right now. Please try again in a moment. (Error: {str(e)[:50]})"
