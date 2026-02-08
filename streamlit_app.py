@@ -60,17 +60,37 @@ if "risks" not in st.session_state:
     st.session_state.risks = None
 
 # --- Resource Loading ---
+import traceback
+
 @st.cache_resource
 def load_engines():
-    return MLRiskEngine(), LLMService()
-
-import traceback
+    errors = []
+    risk_engine = None
+    llm_service = None
+    
+    try:
+        from app.core.risk_engine import MLRiskEngine
+        risk_engine = MLRiskEngine()
+    except Exception as e:
+        errors.append(f"Risk Engine Error: {str(e)}\n{traceback.format_exc()}")
+        
+    try:
+        from app.core.llm_service import LLMService
+        llm_service = LLMService()
+    except Exception as e:
+        errors.append(f"LLM Service Error: {str(e)}\n{traceback.format_exc()}")
+        
+    if errors:
+        raise Exception("\n\n".join(errors))
+        
+    return risk_engine, llm_service
 
 try:
     risk_engine, llm_service = load_engines()
 except Exception as e:
-    st.error(f"Failed to load engines: {e}")
-    st.code(traceback.format_exc())
+    st.error("Application Failed to Start")
+    st.warning("Please copy the error details below and send them to support:")
+    st.code(str(e))
     st.stop()
 
 # --- Sidebar: Health Input ---
