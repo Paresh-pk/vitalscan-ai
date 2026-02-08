@@ -19,7 +19,8 @@ class LLMService:
         # Load API Key from Environment
         self.api_key = os.getenv("HF_TOKEN")
         self.base_url = "https://router.huggingface.co/v1"
-        self.model_name = "openai/gpt-oss-120b:groq"
+        self.model_name = "Qwen/Qwen2.5-Coder-32B-Instruct"
+        #self.model_name = "mistralai/Mistral-7B-Instruct-v0.2"
         
         if self.api_key:
             self.client = OpenAI(
@@ -48,145 +49,67 @@ class LLMService:
             log_debug(f"PROMPT SENT:\n{prompt[:200]}...[truncated]...")
             
             # 2. Call Hugging Face API
-            completion = self.client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
-                    {
-                        "role": "system", 
-                        "content": "You are an expert Preventive Health Advisor. You output STRICT JSON only."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "system", "content": "You are a medical prevention advisor. Provide personalized, actionable health advice in JSON format."},
+                    {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=4000  # Increased for 8 diseases × 5 suggestions each
+                max_tokens=4000,
             )
             
-            # 3. Parse JSON Response
-            content = completion.choices[0].message.content
-            log_debug(f"RAW RESPONSE:\n{content}")
+            raw_text = response.choices[0].message.content
+            log_debug(f"RAW LLM RESPONSE:\n{raw_text[:300]}...[truncated]...")
             
-            # Clean markdown if model adds it despite instructions
-            content = content.replace("```json", "").replace("```", "").strip()
+            # 3. Parse JSON
+            enriched_data = self._parse_llm_response(raw_text)
+            log_debug(f"PARSED JSON KEYS: {list(enriched_data.keys())}")
             
-            # Repair incomplete JSON (common with long responses)
-            content = self._repair_json(content)
-            
-            advice_map = json.loads(content)
-            
-            # 4. Map back to objects
+            # 4. Merge with Original Risks
             for risk in risks:
-                if risk.disease in advice_map:
-                    data = advice_map[risk.disease]
-                    if "prevention_steps" in data:
-                        risk.prevention_steps = data["prevention_steps"]
+                disease_name = risk.disease
+                if disease_name in enriched_data:
+                    risk.prevention_steps = enriched_data[disease_name].get("prevention_steps", risk.prevention_steps)
+                    log_debug(f"✅ Enriched '{disease_name}' with {len(risk.prevention_steps)} steps.")
+                else:
+                    log_debug(f"⚠️ No LLM data for '{disease_name}', using template.")
             
             return risks
-
-        except Exception as e:
-            log_debug(f"EXCEPTION CAUGHT: {str(e)}")
-            return self._template_fallback(risks)
-    
-    def _repair_json(self, text: str) -> str:
-        """
-        Repairs common JSON truncation issues from LLM responses.
-        """
-        # If already valid, return as-is
-        try:
-            json.loads(text)
-            return text
-        except:
-            pass
-        
-        # Close unterminated strings
-        if text.count('"') % 2 != 0:
-            text += '"'
-        
-        # Close unterminated arrays
-        open_brackets = text.count('[') - text.count(']')
-        text += ']' * open_brackets
-        
-        # Close unterminated objects
-        open_braces = text.count('{') - text.count('}')
-        text += '}' * open_braces
-        
-        return text
-
-    def _template_fallback(self, risks: List[DiseaseRisk]) -> List[DiseaseRisk]:
-        """
-        Robust fallback using pre-approved clinical text templates.
-        Updated to match the 5-item, structured format regarding Action, Rationale, and Outcome.
-        """
-        for risk in risks:
-            if not risk.contributing_factors:
-                continue
-
-            if risk.disease == "Type 2 Diabetes":
-                risk.prevention_steps = [
-                    "**Initiate 'Walking Prescriptions'**: Walk for 15 minutes immediately after lunch and dinner. *Why*: Muscle activity burns glucose without insulin. *Result*: Lower post-meal blood sugar.",
-                    "**Optimize Carbohydrate Timing**: Eat carbs only *after* vegetables and protein in your meal. *Why*: Fiber blunts the sugar spike. *Result*: Stable energy levels.",
-                    "**Strength Training Micro-Dosing**: Do 20 squats or push-ups before showering. *Why*: Increases insulin sensitivity in muscles. *Result*: Better long-term glucose control.",
-                    "**Sleep Hygiene Audit**: Extend sleep to 7.5 hours minimum. *Why*: Sleep deprivation causes insulin resistance. *Result*: Lower morning fasting glucose.",
-                    "**Swap Sugary Drinks**: Replace soda/juice with water or tea. *Why*: Liquid sugar spikes insulin rapidly. *Result*: Immediate caloric reduction and metabolic relief."
-                ]
-            elif risk.disease == "Hypertension":
-                risk.prevention_steps = [
-                    "**Sodium Pattern Interrupt**: Stop adding salt at the table entirely. *Why*: Excess sodium retains water, raising pressure. *Result*: potential 5-10 point systolic drop.",
-                    "**Box Breathing Protocol**: Practice 4-4-4-4 breathing for 2 minutes when stressed. *Why*: Activates parasympathetic nervous system. *Result*: Immediate acute BP reduction.",
-                    "**Increase Potassium Intake**: Eat one banana or avocado daily. *Why*: Potassium helps kidneys excrete sodium. *Result*: Balanced electrolyte levels.",
-                    "**Aerobic Consistency**: Walk briskly for 30 minutes, 5 days/week. *Why*: Strengthens the heart muscle. *Result*: Lower resting heart rate and pressure.",
-                    "**Limit Alcohol**: Cap intake to 1 drink/day maximum. *Why*: Alcohol is a direct vasoconstrictor. *Result*: Prevention of evening BP spikes."
-                ]
-            else:
-                # Generic robust fallback for other diseases
-                risk.prevention_steps = [
-                    "**Consult a Specialist**: Schedule a targeted review for this specific condition. *Why*: Clinical evaluation is required for diagnosis. *Result*: Accurate treatment plan.",
-                    "**Track Symptoms Daily**: Log occurrences of symptoms in a journal. *Why*: Identifying triggers helps management. *Result*: Better data for your doctor.",
-                    "**Prioritize Sleep**: Aim for 7-8 hours of quality rest. *Why*: Recovery happens during sleep. *Result*: Improved systemic resilience.",
-                    "**Hydration Strategy**: Drink 2.5L of water daily. *Why*: Dehydration exacerbates most chronic stress. *Result*: Better cellular function.",
-                    "**Stress Reduction**: Practice 10 mins of mindfulness. *Why*: Cortisol management improves most conditions. *Result*: Mental clarity."
-                ]
             
-        return risks
+        except Exception as e:
+            log_debug(f"❌ LLM CALL FAILED: {str(e)}")
+            return self._template_fallback(risks)
 
-    def _build_prompt(self, risks: List[DiseaseRisk], profile: dict) -> str:
+    def _build_prompt(self, risks: List[DiseaseRisk], user_profile: dict) -> str:
         """
-        Constructs a deeply personalized system prompt for Hugging Face/GLM-4.
+        Constructs a detailed prompt for the LLM.
         """
-        risk_summary = []
-        for r in risks:
-            risk_summary.append({
-                "disease": r.disease,
-                "severity": r.risk_level,
-                "drivers": r.contributing_factors
-            })
-
-        profile_str = json.dumps(profile, indent=2) if profile else "Unknown Profile"
-
-        return f"""
-        You are an elite Preventive Health Consultant. Your goal is to provide highly personalized, life-changing advice.
-
-        ### 1. PATIENT PROFILE
-        {profile_str}
-
-        ### 2. IDENTIFIED RISKS
-        {json.dumps(risk_summary, indent=2)}
-
-        ### 3. YOUR TASK
-        For EACH disease listed above, generate exactly **5 Concrete, Prevention/Mitigation Steps**.
+        risk_summary = "\n".join([
+            f"- {r.disease}: {r.probability*100:.1f}% ({r.risk_level.value}) | Drivers: {', '.join(r.contributing_factors[:3])}"
+            for r in risks
+        ])
         
-        ### 4. CRITICAL RULES (Strict Adherence Required)
-        1. **Deep Personalization**: Do NOT say "Exercise more". Look at their specific profile. 
-           - If Age=25 and Sedentary: Suggest "HIIT or Competitive Sports".
-           - If Age=60 and Sedentary: Suggest "Brisk Walking or Swimming".
-           - If Sleep=5h: Suggest "Magnesium glycinate or Blackout curtains".
-        2. **Structure**: Each suggestion must contain:
-           - **Action**: What strictly to do.
-           - **Rationale**: Why this helps THIS specific user (mention their metrics).
-           - **Outcome**: What will improve.
-        3. **Sort Order**: Most impactful first.
+        profile_str = json.dumps(user_profile, indent=2) if user_profile else "Not provided"
+        
+        return f"""
+        ### TASK: Generate Personalized Health Prevention Plans
+
+        ### 1. USER PROFILE
+        ```json
+        {profile_str}
+        ```
+
+        ### 2. RISK ASSESSMENT RESULTS
+        {risk_summary}
+
+        ### 3. YOUR ROLE
+        You are a **preventive health advisor**. For EACH disease above, generate **5 highly personalized, actionable prevention steps**.
+
+        ### 4. PERSONALIZATION RULES
+        1. **Reference Specific Data**: Use exact values from the user profile (e.g., "Your HbA1c is 5.8", "You sit 8h/day").
+        2. **Micro-Habits**: Suggest small, realistic changes (e.g., "Walk 10 mins after dinner" not "Exercise 1h daily").
+        3. **Prioritize High-Impact**: Focus on the top contributing factors.
         4. **Safety**: Do not diagnosis. Add simple caveats (e.g. "if knees allow").
 
         ### 5. OUTPUT FORMAT
@@ -205,3 +128,131 @@ class LLMService:
             ...
         }}
         """
+
+    def _parse_llm_response(self, raw_text: str) -> dict:
+        """
+        Extracts JSON from LLM response (handles markdown code blocks).
+        """
+        try:
+            # Strip markdown code fences
+            if "```json" in raw_text:
+                raw_text = raw_text.split("```json")[1].split("```")[0]
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0]
+            
+            return json.loads(raw_text.strip())
+        except json.JSONDecodeError as e:
+            raise ValueError(f"LLM returned invalid JSON: {str(e)}")
+
+    def _template_fallback(self, risks: List[DiseaseRisk]) -> List[DiseaseRisk]:
+        """
+        Fallback to generic templates if LLM fails.
+        """
+        templates = {
+            "Type 2 Diabetes": [
+                "**Monitor Blood Sugar**: Check fasting glucose monthly.",
+                "**Increase Fiber**: Add beans, oats, vegetables to meals.",
+                "**Walk After Meals**: 10-minute walks reduce glucose spikes.",
+                "**Limit Sugary Drinks**: Replace soda with water or tea.",
+                "**Annual Screening**: Get HbA1c tested yearly."
+            ],
+            "Hypertension": [
+                "**Reduce Sodium**: Aim for <2,300mg/day (1 tsp salt).",
+                "**DASH Diet**: Focus on fruits, vegetables, whole grains.",
+                "**Regular Exercise**: 150 mins/week moderate activity.",
+                "**Stress Management**: Try meditation or deep breathing.",
+                "**Monitor BP**: Check blood pressure weekly at home."
+            ],
+            "Digital Eye Strain": [
+                "**20-20-20 Rule**: Every 20 mins, look 20 feet away for 20 secs.",
+                "**Blue Light Filters**: Use screen filters after sunset.",
+                "**Proper Lighting**: Reduce glare, use task lighting.",
+                "**Blink More**: Consciously blink to prevent dry eyes.",
+                "**Eye Exams**: Annual checkup with optometrist."
+            ]
+        }
+        
+        for risk in risks:
+            if risk.disease in templates:
+                risk.prevention_steps = templates[risk.disease]
+            else:
+                risk.prevention_steps = [
+                    "Consult a healthcare provider for personalized advice.",
+                    "Maintain a healthy lifestyle with balanced diet and exercise.",
+                    "Monitor symptoms and track changes over time.",
+                    "Stay informed about your condition through reliable sources.",
+                    "Schedule regular health checkups."
+                ]
+        
+        return risks
+
+    def chat(self, user_message: str, conversation_history: List[dict] = None, assessment_id: str = None) -> str:
+        """
+        Interactive chat with health assistant.
+        Provides context-aware, personalized health advice.
+        """
+        if not self.api_key:
+            return "I'm currently in offline mode. Please check back later for AI-powered assistance."
+        
+        try:
+            # System prompt for health assistant
+            system_prompt = """You are a knowledgeable and empathetic health assistant for VITALSCAN, an AI-powered preventive health platform.
+
+Your role:
+- Provide evidence-based, actionable health advice
+- Explain health risks and prevention strategies in simple terms
+- Be supportive and encouraging
+- Use bullet points and clear formatting
+
+Critical rules:
+- NEVER diagnose medical conditions
+- NEVER prescribe medications
+- ALWAYS recommend consulting healthcare professionals for serious concerns
+- Keep responses concise (2-3 paragraphs max)
+- If asked about emergency symptoms, urge immediate medical attention
+
+Tone: Professional yet friendly, like a knowledgeable health coach."""
+
+            # Build conversation messages
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            # Add conversation history if available (limit to last 5 messages)
+            if conversation_history:
+                for msg in conversation_history[-5:]:
+                    # Ensure proper role mapping
+                    role = msg.get("role", "user")
+                    if role == "assistant":
+                        role = "assistant"  # Keep as is
+                    elif role == "user":
+                        role = "user"  # Keep as is
+                    else:
+                        continue  # Skip invalid roles
+                    
+                    messages.append({
+                        "role": role,
+                        "content": msg.get("content", "")
+                    })
+            
+            # Add current user message
+            messages.append({"role": "user", "content": user_message})
+            
+            # Call LLM with reduced token limit for stability
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=300  # Reduced from 500 for better reliability
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            # Log the full error for debugging
+            error_msg = str(e)
+            print(f"CHAT ERROR: {error_msg}")
+            
+            # Return user-friendly message
+            if "400" in error_msg:
+                return "I encountered an issue processing your request. Please try rephrasing your question or start a new conversation."
+            else:
+                return f"I'm having trouble connecting right now. Please try again in a moment."

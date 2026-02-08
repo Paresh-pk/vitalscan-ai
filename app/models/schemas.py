@@ -100,3 +100,23 @@ class AssessmentResponse(BaseModel):
     timestamp: datetime
     risks: List[DiseaseRisk]
     disclaimer: str = "ESTIMATE ONLY. NOT A DIAGNOSIS. Consult a physician."
+
+# Chat Models
+class ChatMessage(BaseModel):
+    message: str
+    assessment_id: Optional[str] = None
+    conversation_history: Optional[List[dict]] = []
+
+class ChatResponse(BaseModel):
+    response: str
+    timestamp: str
+
+# Chat Models
+class ChatMessage(BaseModel):
+    message: str
+    assessment_id: Optional[str] = None
+    conversation_history: Optional[List[dict]] = []
+
+class ChatResponse(BaseModel):
+    response: str
+    timestamp: str

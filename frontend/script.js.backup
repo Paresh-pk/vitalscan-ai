@@ -110,11 +110,6 @@ function renderResults(data) {
     const assessmentId = document.getElementById('assessment-id');
     if (assessmentId && data.assessment_id) {
         assessmentId.textContent = data.assessment_id.split('-')[0];
-
-        // Store assessment context for chatbot
-        if (window.chatbot) {
-            window.chatbot.setAssessmentContext(data.assessment_id);
-        }
     }
 
     // SVG Circle Animation

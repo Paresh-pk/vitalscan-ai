@@ -9,9 +9,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=2.4">
-    <link rel="stylesheet" href="/static/effects-3d.css?v=1.1">
-    <link rel="stylesheet" href="/static/wizard.css?v=1.0">
+    <link rel="stylesheet" href="/static/style.css?v=6.0">
+    <link rel="stylesheet" href="/static/effects-3d.css?v=2.0">
+    <link rel="stylesheet" href="/static/wizard.css?v=4.0">
+    <link rel="stylesheet" href="/static/chatbot.css?v=3.0">
 </head>
 
 <body>
@@ -327,8 +328,36 @@
             </section>
         </main>
     </div>
-    <script src="/static/wizard.js"></script>
-    <script src="/static/script.js"></script>
+
+    <!-- Chatbot UI -->
+    <!-- Chatbot UI -->
+    <div class="chat-widget-container">
+        <div class="chat-tooltip">AI Health Assistant</div>
+        <button id="chat-toggle" class="chat-fab">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                    d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 6C13.66 6 15 7.34 15 9C15 10.66 13.66 12 12 12C10.34 12 9 10.66 9 9C9 7.34 10.34 6 12 6ZM12 18C9.33 18 7 16.67 7 15C7 13.33 9.33 12 12 12C14.67 12 17 13.33 17 15C17 16.67 14.67 18 12 18Z"
+                    fill="white" />
+            </svg>
+            <span class="pulse-ring"></span>
+        </button>
+    </div>
+
+    <div id="chat-panel" class="chat-panel hidden">
+        <div class="chat-header">
+            <h3>Health Assistant</h3>
+            <button id="chat-close">×</button>
+        </div>
+        <div id="chat-messages"></div>
+        <div class="chat-input">
+            <input type="text" id="chat-input-field" placeholder="Ask me anything about your health...">
+            <button id="chat-send">Send</button>
+        </div>
+    </div>
+
+    <script src="/static/wizard.js?v=2.0"></script>
+    <script src="/static/script.js?v=5.0"></script>
+    <script src="/static/chatbot.js?v=1.0"></script>
 </body>
 
 </html>

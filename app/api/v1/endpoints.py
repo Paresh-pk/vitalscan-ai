@@ -42,3 +42,34 @@ async def assess_clinical_risk(input_data: ClinicalInput):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
+
+@router.post("/chat", response_model=dict)
+async def chat_with_assistant(chat_msg: dict):
+    """
+    Chat with AI health assistant using LLM.
+    """
+    from app.models.schemas import ChatMessage, ChatResponse
+    from app.core.llm_service import LLMService
+    
+    try:
+        llm_service = LLMService()
+        
+        # Extract message and context
+        user_message = chat_msg.get("message", "")
+        assessment_id = chat_msg.get("assessment_id")
+        history = chat_msg.get("conversation_history", [])
+        
+        # Get AI response
+        ai_response = llm_service.chat(
+            user_message=user_message,
+            conversation_history=history,
+            assessment_id=assessment_id
+        )
+        
+        return {
+            "response": ai_response,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")

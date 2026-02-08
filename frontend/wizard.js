@@ -21,9 +21,11 @@ function showStep(stepIndex) {
     const sections = document.querySelectorAll('.form-section');
     sections.forEach((section, index) => {
         if (index === stepIndex) {
+            section.classList.add('active');
             section.classList.remove('hidden');
             section.style.animationDelay = '0s';
         } else {
+            section.classList.remove('active');
             section.classList.add('hidden');
         }
     });
@@ -54,6 +56,12 @@ function updateProgress() {
 
     // Update step indicators
     progressSteps.forEach((step, index) => {
+        const circle = step.querySelector('.step-circle');
+        // Ensure number is wrapped in span for CSS targeting
+        if (circle && !circle.querySelector('span')) {
+            circle.innerHTML = `<span>${index + 1}</span>`;
+        }
+
         step.classList.remove('active', 'completed');
         if (index < currentStep) {
             step.classList.add('completed');
