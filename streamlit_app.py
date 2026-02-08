@@ -2,8 +2,13 @@ import streamlit as st
 import pandas as pd
 import time
 import uuid
+import sys
+import os
 
-# Set Page Config (Must be first)
+# Ensure project root is in Python path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Set Page Config (Must be first Streamlit command)
 st.set_page_config(
     page_title="VITALSCAN AI",
     page_icon="🩺",
